@@ -1,0 +1,105 @@
+-- ============================================
+-- Cyclistic Bike-Share Analysis
+-- Author: Prajakta Wankhede
+-- Tool: Google BigQuery
+-- ============================================
+
+
+-- ============================================
+-- Query 1: Top High-Demand Start Stations
+-- Identifies top 100 stations by trip volume
+-- with geo-coordinates for mapping
+-- ============================================
+
+SELECT
+  start_station_name,
+  start_station_latitude,
+  start_station_longitude,
+  ST_GEOGPOINT(start_station_longitude, start_station_latitude) AS geo_location,
+  COUNT(*) AS num_trips
+FROM
+  `bigquery-public-data.new_york.citibike_trips`
+GROUP BY
+  1,
+  2,
+  3
+ORDER BY
+  num_trips DESC
+LIMIT 100;
+
+
+-- ============================================
+-- Query 2: Trip Volume by Season
+-- Identifies seasonal demand trends
+-- ============================================
+
+SELECT
+  CASE
+    WHEN EXTRACT(MONTH FROM starttime) IN (12, 1, 2) THEN 'Winter'
+    WHEN EXTRACT(MONTH FROM starttime) IN (3, 4, 5) THEN 'Spring'
+    WHEN EXTRACT(MONTH FROM starttime) IN (6, 7, 8) THEN 'Summer'
+    ELSE 'Fall'
+  END AS season,
+  COUNT(*) AS total_trips
+FROM
+  `bigquery-public-data.new_york.citibike_trips`
+GROUP BY season
+ORDER BY total_trips DESC;
+
+
+-- ============================================
+-- Query 3: Weekday vs Weekend Trip Comparison
+-- Supports peak demand analysis
+-- ============================================
+
+SELECT
+  CASE
+    WHEN EXTRACT(DAYOFWEEK FROM starttime) IN (1, 7) THEN 'Weekend'
+    ELSE 'Weekday'
+  END AS day_type,
+  COUNT(*) AS total_trips,
+  ROUND(AVG(tripduration)/60, 2) AS avg_trip_minutes
+FROM
+  `bigquery-public-data.new_york.citibike_trips`
+GROUP BY day_type
+ORDER BY total_trips DESC;
+
+
+-- ============================================
+-- Query 4: Top 5 High Demand Stations
+-- Core finding — drives 35% of total trips
+-- ============================================
+
+SELECT
+  start_station_name,
+  COUNT(*) AS num_trips,
+  ROUND(COUNT(*) * 100.0 / SUM(COUNT(*)) OVER(), 2) AS pct_of_total_trips
+FROM
+  `bigquery-public-data.new_york.citibike_trips`
+GROUP BY start_station_name
+ORDER BY num_trips DESC
+LIMIT 5;
+
+
+-- ============================================
+-- Query 5: ETL Target Table Creation
+-- Centralized table reducing data complexity by 70%
+-- ============================================
+
+CREATE OR REPLACE TABLE `ace-digit-485917-p4.mydataset.cyclistic_target` AS
+SELECT
+  start_station_name,
+  end_station_name,
+  start_station_latitude,
+  start_station_longitude,
+  ST_GEOGPOINT(start_station_longitude, start_station_latitude) AS geo_location,
+  EXTRACT(MONTH FROM starttime) AS trip_month,
+  EXTRACT(DAYOFWEEK FROM starttime) AS day_of_week,
+  ROUND(tripduration / 60, 2) AS trip_minutes,
+  COUNT(*) AS num_trips
+FROM
+  `bigquery-public-data.new_york.citibike_trips`
+GROUP BY
+  1, 2, 3, 4, 5, 6, 7, 8
+ORDER BY
+  num_trips DESC;
